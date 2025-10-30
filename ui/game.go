@@ -2,14 +2,8 @@ package ui
 
 import (
 	"bytes"
-	"c4/game"
-	"c4/images"
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/opentype"
 	"image"
+
 	"image/color"
 	_ "image/jpeg"
 	_ "image/png"
@@ -17,6 +11,15 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/AbassHammed/c4/game"
+	"github.com/AbassHammed/c4/images"
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/text"
+	textv2 "github.com/hajimehoshi/ebiten/v2/text/v2"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
 )
 
 var backgroundImage,
@@ -37,20 +40,25 @@ func byteSliceToEbitenImage(arr []byte) *ebiten.Image {
 }
 
 func init() {
-	ghost = byteSliceToEbitenImage(resources.Ghost_png)
-	backgroundImage = byteSliceToEbitenImage(resources.Background_png)
-	redBallImage = byteSliceToEbitenImage(resources.Red_png)
-	greenBallImage = byteSliceToEbitenImage(resources.Green_png)
-	owl = byteSliceToEbitenImage(resources.Owl_png)
-	dot = byteSliceToEbitenImage(resources.Dot_png)
-	bats = byteSliceToEbitenImage(resources.Bats_png)
-	boardImage = byteSliceToEbitenImage(resources.Board_png)
-	tt, _ := opentype.Parse(resources.MPlus1pRegular_ttf)
+	ghost = byteSliceToEbitenImage(images.Ghost_png)
+	backgroundImage = byteSliceToEbitenImage(images.Background_png)
+	redBallImage = byteSliceToEbitenImage(images.Red_png)
+	greenBallImage = byteSliceToEbitenImage(images.Green_png)
+	owl = byteSliceToEbitenImage(images.Owl_png)
+	dot = byteSliceToEbitenImage(images.Dot_png)
+	bats = byteSliceToEbitenImage(images.Bats_png)
+	boardImage = byteSliceToEbitenImage(images.Board_png)
+	tt, _ := opentype.Parse(images.MPlus1pRegular_ttf)
 	mplusNormalFont, _ = opentype.NewFace(tt, &opentype.FaceOptions{
 		Size:    20,
 		DPI:     72,
 		Hinting: font.HintingFull,
 	})
+
+	// Crée un adaptateur text/v2 Face depuis un golang.org/x/image/font.Face
+	// afin d'utiliser text/v2.Draw (qui attend un text.Face).
+	// NewGoXFace enveloppe font.Face et fournit la mise en cache des glyphes.
+	tvFace = textv2.NewGoXFace(mplusNormalFont)
 	initBallYCoords()
 }
 
@@ -75,12 +83,7 @@ const (
 	animation
 	opponentAnimation
 	menu
-	waitingForConnect
-	waitingForToken
-	connectToRoomWithToken
-	cantConnectToServer
 	enterAIdifficulty
-	wrongToken
 )
 
 const (
@@ -95,7 +98,7 @@ const (
 	gravity           = 0.5
 )
 
-//the column the opponent has chosen last
+// colonne choisie par l'adversaire lors du dernier coup
 var opponentLastCol int
 var frameCount int
 var gameState GameState = menu
@@ -104,37 +107,35 @@ var ballYcoords [7][6]float64
 var ballFallSpeed [7][6]float64
 
 var mplusNormalFont font.Face
+var tvFace textv2.Face
 
-//this is used to receive information for setting up an online game
-var serverCommunicationChannel chan gameLogic.ServerMessage = make(chan gameLogic.ServerMessage)
-
-//messages shown during a match of the game
+// messages affichés pendant une partie
 var messages [7]string = [7]string{"Your turn", "Other's turn", "You win!", "You lost.", "Tie.", "...", "..."}
 
-//the token with which a user connects or the token received by server
-var token string
+// gm is le gestionnaire de partie (peut être nil si pas de partie en cours)
+var gm *game.GameManager
 
-var gm gameLogic.GameManager
-
-func changeGameStateBasedOnGameManagerState(gmState int) {
-	if gmState != 0 {
-		if gmState == gameLogic.Win {
+func changeGameStateBasedOnGameManagerState(gmState game.GameState) {
+	if gmState != game.Running {
+		switch gmState {
+		case game.Win:
 			gameState = win
-		}
-		if gmState == gameLogic.Lose {
+		case game.Lose:
 			gameState = lose
-		}
-		if gmState == gameLogic.Tie {
+		case game.Tie:
 			gameState = tie
 		}
 	}
 }
-	
-func updateBallPos(){
+
+func updateBallPos() {
 	for i := 0; i < 6; i++ {
 		for j := 0; j < 7; j++ {
-			if gm.GetHoleColor(i, j) == gameLogic.PlayerTwoColor ||
-			gm.GetHoleColor(i, j) == gameLogic.PlayerOneColor {
+			if gm == nil {
+				continue
+			}
+			if gm.GetHoleColor(i, j) == game.PlayerTwoColor ||
+				gm.GetHoleColor(i, j) == game.PlayerOneColor {
 				y, x := i, j
 				destY := float64(y) * tileHeight
 				fallY := &ballYcoords[x][y]
@@ -151,9 +152,11 @@ func updateBallPos(){
 	}
 }
 
-//the main logic of the game, changing game state moving between menus and starting a match of the game
+// logique principale du jeu : transitions d'état et démarrage d'une partie
 func (g *Game) Update() error {
 	press := inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft)
+	// lire les caractères tapés (gère AZERTY et autres dispositions)
+	inputRunes := ebiten.AppendInputChars(nil)
 
 	if gameState == yourTurn || gameState == opponentTurn {
 		frameCount++
@@ -161,124 +164,95 @@ func (g *Game) Update() error {
 
 	if gameState == animation || gameState == opponentAnimation {
 		frameCount = 0
-		updateBallPos();
+		updateBallPos()
 	}
 
 	if frameCount == fps*secondsToMakeTurn {
 		os.Exit(1)
 	}
 
-	// updateBallPos();
+	// mise à jour des positions des billes (désactivée)
 
-	if gameState == yourTurn && press {
+	if (gameState == yourTurn || gameState == opponentTurn) && press {
 		mouseX, _ := ebiten.CursorPosition()
-		if gm.MakePlayerTurn(xcoordToColumn(mouseX)) {
+		if gm != nil {
+			prevState := gameState
+			ok, _ := gm.MakePlayerTurn(xcoordToColumn(mouseX))
+			if ok {
+				// show animation for the drop
+				gameState = animation
+				go func(prev GameState) {
+					time.Sleep(1 * time.Second)
+					// si la partie est terminée, mettre à jour l'état final
+					gmState := gm.GetState()
+					if gmState != game.Running {
+						changeGameStateBasedOnGameManagerState(gmState)
+						return
+					}
+					// si l'adversaire est une IA, planifier son coup
+					if gm.IsAI() {
+						// après le coup du joueur, l'IA joue
+						gameState = opponentTurn
+					} else {
+						// jeu local à deux : basculer le tour
+						if prev == yourTurn {
+							gameState = opponentTurn
+						} else {
+							gameState = yourTurn
+						}
+					}
+				}(prevState)
+			}
+		}
+	}
+
+	if gameState == opponentTurn {
+		// jouer automatiquement uniquement si l'adversaire est IA ; sinon attendre l'entrée utilisateur
+		if gm != nil && gm.IsAI() {
 			gameState = animation
 			go func() {
-				gmState := gm.GetState()
+				col, _ := gm.MakeOpponentTurn(-1)
+				opponentLastCol = col
+				gameState = opponentAnimation
 				time.Sleep(1 * time.Second)
-				if gmState == gameLogic.Running {
-					gameState = opponentTurn
+				if gm != nil {
+					gmState := gm.GetState()
+					if gmState == game.Running {
+						gameState = yourTurn
+					} else {
+						changeGameStateBasedOnGameManagerState(gmState)
+					}
 				} else {
-					changeGameStateBasedOnGameManagerState(gmState)
+					gameState = yourTurn
 				}
 			}()
 		}
 	}
 
-	if gameState == opponentTurn {
-		gameState = animation
-		go func() {
-			opponentLastCol = gm.MakeOpponentTurn()
-			gameState = opponentAnimation
-			time.Sleep(1 * time.Second)
-			gmState := gm.GetState()
-			if gmState == gameLogic.Running {
+	if gameState == menu {
+		for _, r := range inputRunes {
+			switch r {
+			case 'a', 'A':
+				gameState = enterAIdifficulty
+			case 'p', 'P':
+				gm = game.NewGameManager(false, 0)
 				gameState = yourTurn
-			} else {
-				changeGameStateBasedOnGameManagerState(gmState)
 			}
-		}()
-	}
-
-	if gameState == menu && ebiten.IsKeyPressed(ebiten.KeyA) {
-		gameState = enterAIdifficulty
+		}
 	}
 
 	if gameState == enterAIdifficulty {
-		diff := string(ebiten.InputChars())
-		if len(diff) == 1 {
+		runes := ebiten.AppendInputChars(nil)
+		if len(runes) == 1 {
+			diff := string(runes)
 			difficulty, err := strconv.Atoi(diff)
 			if err == nil {
 				gameState = yourTurn
-				gm = gameLogic.NewGameManager(nil, true, difficulty+3)
+				gm = game.NewGameManager(true, difficulty+3)
 			}
 		}
 	}
-
-	if gameState == menu && ebiten.IsKeyPressed(ebiten.KeyO) {
-		gameState = waitingForConnect
-		go gameLogic.QuickplayLobby(serverCommunicationChannel)
-	}
-
-	if gameState == menu && ebiten.IsKeyPressed(ebiten.KeyR) {
-		gameState = waitingForToken
-		go gameLogic.CreateRoom(serverCommunicationChannel)
-	}
-
-	if gameState == menu && inpututil.IsKeyJustReleased(ebiten.KeyC) {
-		gameState = connectToRoomWithToken
-	}
-
-	if gameState == connectToRoomWithToken {
-		token += string(ebiten.InputChars())
-		if len(token) == 5 {
-			gameState = waitingForConnect
-			go gameLogic.ConnectToRoom(token, serverCommunicationChannel)
-		}
-	}
-
-	if gameState == waitingForToken {
-		select {
-		case gameInfo := <-serverCommunicationChannel:
-			if gameInfo.Conn == nil {
-				gameState = cantConnectToServer
-			} else {
-				token = gameInfo.Token
-				gameState = waitingForConnect
-			}
-		default:
-		}
-	}
-
-	if gameState == waitingForConnect {
-		select {
-		case gameInfo := <-serverCommunicationChannel:
-			if gameInfo.Conn == nil {
-				token = ""
-				gameState = cantConnectToServer
-			} else if gameInfo.Status == "wrong_token" {
-				token = ""
-				gameState = wrongToken
-			} else {
-				if gameInfo.IsSecond {
-					gameState = opponentTurn
-				} else {
-					gameState = yourTurn
-				}
-				gm = gameLogic.NewGameManager(gameInfo.Conn, false, 0)
-			}
-		default:
-		}
-	}
-
-	if gameState == cantConnectToServer || gameState == wrongToken {
-		frameCount++
-		if frameCount == 2*fps {
-			frameCount = 0
-			gameState = menu
-		}
-	}
+	// Partie locale à deux sur le même clavier : démarrée par 'P' (gérée ci-dessus via inputRunes)
 
 	if isGameOver() && press {
 		mouseX, mouseY := ebiten.CursorPosition()
@@ -291,7 +265,7 @@ func (g *Game) Update() error {
 			var s [7][6]float64
 			ballFallSpeed = s
 			initBallYCoords()
-			if gmState == gameLogic.Win {
+			if gmState == game.Win {
 				gameState = opponentTurn
 			} else {
 				gameState = yourTurn
@@ -301,12 +275,12 @@ func (g *Game) Update() error {
 	return nil
 }
 
-//isGameOver returns whether the game is over
+// isGameOver returns whether the game is over
 func isGameOver() bool {
 	return gameState == tie || gameState == win || gameState == lose
 }
 
-//this fucntion draws the graphic of the game based on the gameState
+// dessine l'interface en fonction de l'état de la partie
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.DrawImage(backgroundImage, nil)
 	op := &ebiten.DrawImageOptions{}
@@ -316,39 +290,25 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	op.GeoM.Reset()
 
 	op.GeoM.Translate(boardX, boardY)
-	if gameState == menu || gameState == cantConnectToServer || gameState == wrongToken {
+	if gameState == menu {
 		screen.DrawImage(boardImage, op)
-		text.Draw(screen, "[A] - play against AI", mplusNormalFont, boardX, boardY-30, color.White)
-		text.Draw(screen, "[R] - create a room", mplusNormalFont, boardX, 570, color.White)
-		text.Draw(screen, "[C] - connect to a room", mplusNormalFont, boardX+250, 570, color.White)
-		text.Draw(screen, "[O] - play online (quick play)", mplusNormalFont, boardX+250, boardY-30, color.White)
-		if gameState == cantConnectToServer {
-			text.Draw(screen, "Can't connect to server!", mplusNormalFont, 200, 200, color.White)
-		}
-		if gameState == wrongToken {
-			text.Draw(screen, "There is no room with this token!", mplusNormalFont, 200, 200, color.White)
-		}
-		return
-	}
+		// Utilise text/v2.Draw avec l'adaptateur GoXFace (tvFace). La position est définie
+		// via DrawOptions.DrawImageOptions.GeoM.Translate.
+		o1 := &textv2.DrawOptions{}
+		o1.DrawImageOptions.GeoM.Translate(float64(boardX), float64(boardY-30))
+		textv2.Draw(screen, "[A] - play against AI", tvFace, o1)
 
-	if gameState == connectToRoomWithToken {
-		screen.DrawImage(boardImage, op)
-		text.Draw(screen, "Enter the code for room:\n"+token, mplusNormalFont, 200, 50, color.White)
+		o2 := &textv2.DrawOptions{}
+		o2.DrawImageOptions.GeoM.Translate(float64(boardX), float64(570))
+		textv2.Draw(screen, "[P] - play local (2 players)", tvFace, o2)
 		return
 	}
 
 	if gameState == enterAIdifficulty {
 		screen.DrawImage(boardImage, op)
-		text.Draw(screen, "Enter difficulty (1-9)\n"+token, mplusNormalFont, 200, 50, color.White)
-		return
-	}
-
-	if gameState == waitingForConnect || gameState == waitingForToken {
-		screen.DrawImage(boardImage, op)
-		text.Draw(screen, "waiting for opponent...", mplusNormalFont, 200, 50, color.White)
-		if token != "" {
-			text.Draw(screen, "Your token is: "+token, mplusNormalFont, 200, 80, color.White)
-		}
+		o := &textv2.DrawOptions{}
+		o.DrawImageOptions.GeoM.Translate(200, 50)
+		textv2.Draw(screen, "Enter difficulty (1-9)", tvFace, o)
 		return
 	}
 
@@ -373,21 +333,27 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 }
 
-//drawBalls draws all the balls to the screen
+// dessine toutes les billes à l'écran
 func drawBalls(screen *ebiten.Image) {
+	if gm == nil {
+		return
+	}
 	for i := 0; i < 6; i++ {
 		for j := 0; j < 7; j++ {
-			if gm.GetHoleColor(i, j) == gameLogic.PlayerTwoColor {
-				drawBall(j, i, gameLogic.PlayerTwoColor, screen)
-			} else if gm.GetHoleColor(i, j) == gameLogic.PlayerOneColor {
-				drawBall(j, i, gameLogic.PlayerOneColor, screen)
+			if gm.GetHoleColor(i, j) == game.PlayerTwoColor {
+				drawBall(j, i, game.PlayerTwoColor, screen)
+			} else if gm.GetHoleColor(i, j) == game.PlayerOneColor {
+				drawBall(j, i, game.PlayerOneColor, screen)
 			}
 		}
 	}
 }
 
-//drawWinnerDors draws the dots indicating where the winner has four connected balls
+// dessine les points indiquant les quatre jetons gagnants
 func drawWinnerDots(screen *ebiten.Image) {
+	if gm == nil {
+		return
+	}
 	win, dotsY, dotsX := gm.WhereConnected()
 	if !win {
 		return
@@ -400,14 +366,17 @@ func drawWinnerDots(screen *ebiten.Image) {
 	}
 }
 
-//drawGhost draws the ghost image to the screen
+// dessine l'image fantôme à l'écran
 func drawGhost(screen *ebiten.Image) {
+	if gm == nil || !gm.IsAI() {
+		return
+	}
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(float64(opponentLastCol)*tileHeight+boardX+10, boardY-75)
 	screen.DrawImage(ghost, op)
 }
 
-//drawOwl draws the owl image to the screen
+// dessine le hibou à l'écran
 func drawOwl(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	mouseX, _ := ebiten.CursorPosition()
@@ -422,48 +391,35 @@ func drawOwl(screen *ebiten.Image) {
 	screen.DrawImage(owl, op)
 }
 
-//drawBall draws the ball to the screen
+// dessine une bille à l'écran
 func drawBall(x, y int, player string, screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(boardX+tileOffset, boardY+tileOffset)
-	op.GeoM.Translate(float64(x)*tileHeight, ballYcoords[x][y]);
-	
-	if player == gameLogic.PlayerTwoColor {
+	op.GeoM.Translate(float64(x)*tileHeight, ballYcoords[x][y])
+
+	if player == game.PlayerTwoColor {
 		screen.DrawImage(redBallImage, op)
 	} else {
 		screen.DrawImage(greenBallImage, op)
 	}
 }
 
-func updateBallsPos(x, y int){
-	// for y := 0; y < 6; y++ {
-	// 	for x := 0; x < 7; x++ {
-			destY := float64(y) * tileHeight
-			fallY := &ballYcoords[x][y]
-			fallSpeed := &ballFallSpeed[x][y]
-
-			*fallY += *fallSpeed
-			*fallSpeed += gravity
-			if *fallY > destY {
-				*fallY = destY
-				*fallSpeed = 0
-			}		
-	// 	}
-	// }
-}
+// updateBallsPos supprimée : la mise à jour des positions est effectuée par updateBallPos
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return 640, 640
 }
 
-//xcoordToColumn returns the column correspondidng which contains the x coordinate
+// xcoordToColumn returns the column correspondidng which contains the x coordinate
 func xcoordToColumn(x int) int {
 	return int(float64(x-tileOffset-boardX) / tileHeight)
 }
 
-//StartGuiGame initializes the game and the gui, this is the entry point for the whole game
+// StartGuiGame initializes the game and the gui, this is the entry point for the whole game
 func StartGuiGame() {
 	ebiten.SetWindowSize(640, 640)
 	ebiten.SetWindowTitle("Connect four")
-	ebiten.RunGame(&Game{})
+	if err := ebiten.RunGame(&Game{}); err != nil {
+		log.Fatal(err)
+	}
 }

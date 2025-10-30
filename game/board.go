@@ -29,7 +29,7 @@ const (
 // - soit le nombre maximal de coups a été atteint (toutes les cases remplies),
 // - soit un joueur a quatre jetons connectés.
 func (b *Board) gameOver() bool {
-	return b.movesMade == 42 || b.areFourConnected("<>") || b.areFourConnected("<>")
+	return b.movesMade == 42 || b.areFourConnected(PlayerOneColor) || b.areFourConnected(PlayerTwoColor)
 }
 
 // copyOfBoard renvoie une copie profonde du plateau courant. La copie
@@ -51,15 +51,14 @@ func (b *Board) copyOfBoard() *Board {
 // Puissance 4. Toutes les cases sont initialisées avec le symbole
 // représentant une case vide et les compteurs de colonnes sont remis à zéro.
 func NewBoard() *Board {
-	var b *Board
-	b = new(Board)
+	b := new(Board)
 	b.movesMade = 0
 	b.col = make([]int, boardWidth)
 	// initialize the connect 4 board
-	for i := 0; i < boardHeight; i++ {
+	for range boardHeight {
 		row := make([]string, boardWidth)
 
-		for i := 0; i < len(row); i++ {
+		for i := range row {
 			row[i] = emptySpot
 		}
 		b.board = append(b.board, row)
