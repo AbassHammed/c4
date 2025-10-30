@@ -8,14 +8,14 @@ import (
 // Il maintient l'état du jeu, gère les tours des joueurs et de l'IA,
 // et compte les victoires/défaites.
 type GameManager struct {
-	board     Board    // Plateau de jeu
-	ai        bool     // true si l'adversaire est une IA
-	turn      int      // Numéro du tour actuel
+	board     Board     // Plateau de jeu
+	ai        bool      // true si l'adversaire est une IA
+	turn      int       // Numéro du tour actuel
 	state     GameState // État actuel de la partie
-	winner    string   // Symbole du joueur gagnant ("" si pas de gagnant)
-	aiDiff    int      // Niveau de difficulté de l'IA
-	lostGames int      // Nombre de parties perdues
-	wonGames  int      // Nombre de parties gagnées
+	winner    string    // Symbole du joueur gagnant ("" si pas de gagnant)
+	aiDiff    int       // Niveau de difficulté de l'IA
+	lostGames int       // Nombre de parties perdues
+	wonGames  int       // Nombre de parties gagnées
 }
 
 // GameState représente l'état d'une partie.
@@ -23,9 +23,9 @@ type GameState int
 
 const (
 	Running GameState = iota // Partie en cours
-	Win                     // Victoire du joueur
-	Lose                    // Défaite du joueur
-	Tie                     // Match nul
+	Win                      // Victoire du joueur
+	Lose                     // Défaite du joueur
+	Tie                      // Match nul
 )
 
 const (
@@ -84,6 +84,7 @@ func (gm *GameManager) MakePlayerTurn(column int) (bool, error) {
 	}
 	return false, fmt.Errorf("invalid move: column %d is full or invalid", column)
 }
+
 // MakeOpponentTurn performs the opponent's move. If the GameManager is configured
 // to use an AI (gm.ai == true) the AI will pick a column and providedColumn is ignored.
 // For a human opponent (gm.ai == false) the caller must pass the chosen column
@@ -144,4 +145,9 @@ func (gm *GameManager) GetWonGames() int {
 // GetLostGames renvoie le nombre de parties perdues.
 func (gm *GameManager) GetLostGames() int {
 	return gm.lostGames
+}
+
+// IsAI indique si l'adversaire est contrôlé par l'IA.
+func (gm *GameManager) IsAI() bool {
+	return gm.ai
 }
