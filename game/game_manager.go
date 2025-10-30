@@ -85,11 +85,11 @@ func (gm *GameManager) MakePlayerTurn(column int) (bool, error) {
 	return false, fmt.Errorf("invalid move: column %d is full or invalid", column)
 }
 
-// MakeOpponentTurn performs the opponent's move. If the GameManager is configured
-// to use an AI (gm.ai == true) the AI will pick a column and providedColumn is ignored.
-// For a human opponent (gm.ai == false) the caller must pass the chosen column
-// via providedColumn. The method returns the column that was played and an error if
-// the move was invalid.
+// MakeOpponentTurn effectue le coup de l'adversaire.
+// Si gm.ai == true, l'IA choisit une colonne et providedColumn est ignorée.
+// Pour un adversaire humain (gm.ai == false), l'appelant doit fournir la colonne
+// choisie via providedColumn. La méthode renvoie la colonne jouée et une erreur
+// si le coup est invalide.
 func (gm *GameManager) MakeOpponentTurn(providedColumn int) (int, error) {
 	var column int
 	if gm.ai {

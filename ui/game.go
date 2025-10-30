@@ -55,9 +55,9 @@ func init() {
 		Hinting: font.HintingFull,
 	})
 
-	// Create a text/v2 Face adapter from the golang.org/x/image/font.Face so
-	// we can use the new text/v2.Draw API which expects a text.Face.
-	// NewGoXFace wraps a font.Face and provides glyph caching.
+	// Crée un adaptateur text/v2 Face depuis un golang.org/x/image/font.Face
+	// afin d'utiliser text/v2.Draw (qui attend un text.Face).
+	// NewGoXFace enveloppe font.Face et fournit la mise en cache des glyphes.
 	tvFace = textv2.NewGoXFace(mplusNormalFont)
 	initBallYCoords()
 }
@@ -98,7 +98,7 @@ const (
 	gravity           = 0.5
 )
 
-// the column the opponent has chosen last
+// colonne choisie par l'adversaire lors du dernier coup
 var opponentLastCol int
 var frameCount int
 var gameState GameState = menu
@@ -109,7 +109,7 @@ var ballFallSpeed [7][6]float64
 var mplusNormalFont font.Face
 var tvFace textv2.Face
 
-// messages shown during a match of the game
+// messages affichés pendant une partie
 var messages [7]string = [7]string{"Your turn", "Other's turn", "You win!", "You lost.", "Tie.", "...", "..."}
 
 // gm is le gestionnaire de partie (peut être nil si pas de partie en cours)
@@ -152,10 +152,10 @@ func updateBallPos() {
 	}
 }
 
-// the main logic of the game, changing game state moving between menus and starting a match of the game
+// logique principale du jeu : transitions d'état et démarrage d'une partie
 func (g *Game) Update() error {
 	press := inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft)
-	// read typed characters (handles AZERTY and other layouts)
+	// lire les caractères tapés (gère AZERTY et autres dispositions)
 	inputRunes := ebiten.AppendInputChars(nil)
 
 	if gameState == yourTurn || gameState == opponentTurn {
@@ -171,7 +171,7 @@ func (g *Game) Update() error {
 		os.Exit(1)
 	}
 
-	// updateBallPos();
+	// mise à jour des positions des billes (désactivée)
 
 	if (gameState == yourTurn || gameState == opponentTurn) && press {
 		mouseX, _ := ebiten.CursorPosition()
@@ -183,18 +183,18 @@ func (g *Game) Update() error {
 				gameState = animation
 				go func(prev GameState) {
 					time.Sleep(1 * time.Second)
-					// if game ended, update final state
+					// si la partie est terminée, mettre à jour l'état final
 					gmState := gm.GetState()
 					if gmState != game.Running {
 						changeGameStateBasedOnGameManagerState(gmState)
 						return
 					}
-					// if opponent is AI, schedule AI move
+					// si l'adversaire est une IA, planifier son coup
 					if gm.IsAI() {
-						// after player's move, AI will play next
+						// après le coup du joueur, l'IA joue
 						gameState = opponentTurn
 					} else {
-						// local two-player: toggle turn
+						// jeu local à deux : basculer le tour
 						if prev == yourTurn {
 							gameState = opponentTurn
 						} else {
@@ -207,7 +207,7 @@ func (g *Game) Update() error {
 	}
 
 	if gameState == opponentTurn {
-		// only auto-play when opponent is AI; for local play we wait for user input
+		// jouer automatiquement uniquement si l'adversaire est IA ; sinon attendre l'entrée utilisateur
 		if gm != nil && gm.IsAI() {
 			gameState = animation
 			go func() {
@@ -252,7 +252,7 @@ func (g *Game) Update() error {
 			}
 		}
 	}
-	// Local two-player (same keyboard) can also be started by pressing 'P' (handled above via inputRunes)
+	// Partie locale à deux sur le même clavier : démarrée par 'P' (gérée ci-dessus via inputRunes)
 
 	if isGameOver() && press {
 		mouseX, mouseY := ebiten.CursorPosition()
@@ -280,7 +280,7 @@ func isGameOver() bool {
 	return gameState == tie || gameState == win || gameState == lose
 }
 
-// this fucntion draws the graphic of the game based on the gameState
+// dessine l'interface en fonction de l'état de la partie
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.DrawImage(backgroundImage, nil)
 	op := &ebiten.DrawImageOptions{}
@@ -292,7 +292,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	op.GeoM.Translate(boardX, boardY)
 	if gameState == menu {
 		screen.DrawImage(boardImage, op)
-		// Use text/v2 Draw with a GoXFace adapter (tvFace). Set Translate on the DrawOptions GeoM for position.
+		// Utilise text/v2.Draw avec l'adaptateur GoXFace (tvFace). La position est définie
+		// via DrawOptions.DrawImageOptions.GeoM.Translate.
 		o1 := &textv2.DrawOptions{}
 		o1.DrawImageOptions.GeoM.Translate(float64(boardX), float64(boardY-30))
 		textv2.Draw(screen, "[A] - play against AI", tvFace, o1)
@@ -332,7 +333,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 }
 
-// drawBalls draws all the balls to the screen
+// dessine toutes les billes à l'écran
 func drawBalls(screen *ebiten.Image) {
 	if gm == nil {
 		return
@@ -348,7 +349,7 @@ func drawBalls(screen *ebiten.Image) {
 	}
 }
 
-// drawWinnerDors draws the dots indicating where the winner has four connected balls
+// dessine les points indiquant les quatre jetons gagnants
 func drawWinnerDots(screen *ebiten.Image) {
 	if gm == nil {
 		return
@@ -365,7 +366,7 @@ func drawWinnerDots(screen *ebiten.Image) {
 	}
 }
 
-// drawGhost draws the ghost image to the screen
+// dessine l'image fantôme à l'écran
 func drawGhost(screen *ebiten.Image) {
 	if gm == nil || !gm.IsAI() {
 		return
@@ -375,7 +376,7 @@ func drawGhost(screen *ebiten.Image) {
 	screen.DrawImage(ghost, op)
 }
 
-// drawOwl draws the owl image to the screen
+// dessine le hibou à l'écran
 func drawOwl(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	mouseX, _ := ebiten.CursorPosition()
@@ -390,7 +391,7 @@ func drawOwl(screen *ebiten.Image) {
 	screen.DrawImage(owl, op)
 }
 
-// drawBall draws the ball to the screen
+// dessine une bille à l'écran
 func drawBall(x, y int, player string, screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(boardX+tileOffset, boardY+tileOffset)
@@ -403,7 +404,7 @@ func drawBall(x, y int, player string, screen *ebiten.Image) {
 	}
 }
 
-// (removed) updateBallsPos was unused; ball position updates are handled by updateBallPos
+// updateBallsPos supprimée : la mise à jour des positions est effectuée par updateBallPos
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return 640, 640
