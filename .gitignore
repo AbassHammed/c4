@@ -1,0 +1,43 @@
+## Go build and dependency artifacts
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Output directories
+/bin/
+/pkg/
+/out/
+/build/
+
+# Test binary and coverage
+*.test
+coverage.out
+
+# Dependency directories
+/vendor/
+
+# Go workspace
+Godeps/
+
+## IDEs and editors
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+*~
+
+## OS generated files
+.DS_Store
+Thumbs.db
+
+## Environment files
+.env
+.env.local
+
+## Logs
+*.log
