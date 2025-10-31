@@ -22,7 +22,6 @@ jobs:
 
       - name: Run tests and generate coverage
         run: |
-          cd c4 
           go test -v -coverprofile=coverage.out ./game/...
 
       - name: Upload coverage to Codecov
