@@ -1,0 +1,6 @@
+# Define ownership for the CODEOWNERS file itself
+/.github/CODEOWNERS @AbassHammed
+
+*.go @AbassHammed @Ayame-shitori @Mohieddine80
+
+* @AbassHammed

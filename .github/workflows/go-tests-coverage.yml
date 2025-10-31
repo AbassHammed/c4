@@ -1,0 +1,33 @@
+name: Go Test & Coverage
+
+on:
+  push:
+    # S'exécute uniquement sur les push vers la branche "master"
+    branches:
+      - master
+
+jobs:
+  build-and-test:
+    # Utilise la dernière version d'Ubuntu pour exécuter les tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.3"
+
+      - name: Run tests and generate coverage
+        run: |
+          cd c4 
+          go test -v -coverprofile=coverage.out ./game/...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./c4/coverage.out
+          fail_ci_if_error: true
