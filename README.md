@@ -1,3 +1,4 @@
+[![codecov](https://codecov.io/github/AbassHammed/c4/graph/badge.svg?token=H8BPDEV95M)](https://codecov.io/github/AbassHammed/c4)
 # Projet Puissance 4 (R5.08)
 
 Implémentation d'un jeu de Puissance 4 en Go, utilisant la bibliothèque graphique Ebiten. Ce projet inclut un mode deux joueurs (local) et un mode joueur contre une intelligence artificielle (IA) basée sur l'algorithme Minimax.
